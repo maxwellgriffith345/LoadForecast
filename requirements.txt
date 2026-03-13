@@ -1,0 +1,7 @@
+python
+pandas
+numpy
+openmeteo-requests
+requests-cache
+retry-requests
+gridstatusio
