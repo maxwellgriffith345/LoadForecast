@@ -17,6 +17,11 @@ use SKLearn to forecast SPP load
   - [GS Data Catalog](https://www.gridstatus.io/datasets?filter=load&source=spp)
   - Load Hourly [GS API](https://www.gridstatus.io/datasets/spp_load_hourly)
   - [Python Client for GS API](https://github.com/gridstatus/gridstatusio)
+  - [Grid Status Dev Best Practices](https://docs.gridstatus.io/developers/concepts/best-practices#python)
+  - There are two forecast types: Conforming load and non-conforming Load
+  - conforming load is load that changes predictably and mainly driven by env factors like temperture
+  - non-conforming does not follow a predictable pattern and is forecast separately and added to the confirming load forecast
+  - we will focus on confirming load
 - Historical Weather Data:
   - [Open Meteo](https://open-meteo.com/)
   - also use for weather forecast for exogenous variables for predictions
