@@ -4,12 +4,26 @@ import pandas as pd
 from datetime import datetime, timedelta
 from config import GRIDSTATUS_API_KEY
 from gridstatusio import GridStatusClient
+import openmeteo_requests
+import requests_cache
+from retry_requests import retry
 
 
 START_DATE = datetime(2025, 1, 1) #year, month, day
 END_DATE = datetime(2025, 2, 1)
 
 """Extract Load data"""
+
+def get_load_client():
+    client = GridStatusClient(
+    max_retries=3,        # Maximum retries (default: 5)
+    base_delay=1.0,       # Base delay in seconds (default: 2.0)
+    exponential_base=1.5, # Exponential backoff multiplier (default: 2.0)
+    api_key = GRIDSTATUS_API_KEY
+    )
+
+    return client
+
 #Batch for large queries
 def fetch_load_batches(client, dataset: str,start: datetime,end: datetime, batch_days: int = 7, **kwargs) -> pd.DataFrame:
     """Fetch data in batches to avoid timeouts."""
@@ -33,10 +47,12 @@ def fetch_load_batches(client, dataset: str,start: datetime,end: datetime, batch
 
         current = batch_end
 
+        #add logic to wait one second as gridstatus throttles requests
+
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Usage
-def fetch_load(client): -> pd.DataFrame:
+def fetch_load(client) -> pd.DataFrame:
 
     df = fetch_load_batches(
         client,
@@ -52,7 +68,7 @@ def fetch_load(client): -> pd.DataFrame:
 
     return df
 
-def clean_load(df: pd.DataFrame): -> pd.DataFrame:
+def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     #make a copy of dataframe?
     df = df.copy()
     #filter out NC load
@@ -68,22 +84,22 @@ def clean_load(df: pd.DataFrame): -> pd.DataFrame:
 def get_weather_client(): #No API Key needed
     cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
     retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-    openmeteo = openmeteo_requests.Client(session = retry_session)
-    return openmeteo
+    client = openmeteo_requests.Client(session = retry_session)
+    return client
 
 def fetch_weather(client):
     url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
     params = {
     	"latitude": 39.0997,
     	"longitude": -94.5786,
-    	"start_date": "2025-01-01",
-    	"end_date": "2025-01-02",
+    	"start_date": START_DATE.strftime("%Y-%m-%d"),
+    	"end_date": END_DATE.strftime("%Y-%m-%d"),
     	"hourly": "temperature_2m",
     }
 
     #batch the rest of this?
     #make request
-    responses = openmeteo.weather_api(url, params = params)
+    responses = client.weather_api(url, params = params)
     response = responses[0]
 
     #Process hourly data
@@ -99,14 +115,15 @@ def fetch_weather(client):
         )
     }
 
-    hourly_data["temperature_2m"] = hourly_temperature_2m
+    hourly_data["temperature"] = hourly_temperature_2m
     hourly_dataframe = pd.DataFrame(data = hourly_data)
 
+    return hourly_dataframe
 
 
 def run():
 
-    load_client = GridStatusClient(api_key = GRIDSTATUS_API_KEY)
+    load_client = get_load_client()
     weather_client = get_weather_client()
 
     load_df = fetch_load(load_client)
