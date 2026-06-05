@@ -47,13 +47,13 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -
 
 
 #Batch for large queries
-def fetch_load_batches(client, batch_days: int = 7) -> pd.DataFrame:
+def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 7) -> pd.DataFrame:
     """Fetch data in batches to avoid timeouts."""
     all_data = []
-    current = START_DATE
+    current = start
 
-    while current < END_DATE:
-        batch_end = min(current + timedelta(days=batch_days), END_DATE)
+    while current < end:
+        batch_end = min(current + timedelta(days=batch_days), end)
 
         print(f"Fetching {current.date()} to {batch_end.date()}...")
 
@@ -125,13 +125,14 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
 
     return df
 
-def fetch_weather_batches(client, batch_days: int = 30) -> pd.DataFrame:
+def fetch_weather_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 30) -> pd.DataFrame:
     """Fetch weather in batches to avoid timeouts."""
+    """ TODO: Need logic if date range is smaller than batch size"""
     all_data = []
-    current = START_DATE
+    current = start
 
-    while current < END_DATE:
-        batch_end = min(current + timedelta(days=batch_days), END_DATE)
+    while current < end:
+        batch_end = min(current + timedelta(days=batch_days), end)
 
         print(f"Fetching weather {current.date()} to {batch_end.date()}...")
 
@@ -144,13 +145,13 @@ def fetch_weather_batches(client, batch_days: int = 30) -> pd.DataFrame:
     return pd.concat(all_data) if all_data else pd.DataFrame()
 
 
-def fetch_all_data():
+def fetch_all_data(start: datetime = START_DATE, end: datetime = END_DATE):
 
     load_client = get_load_client()
     weather_client = get_weather_client()
 
-    load_df = fetch_load_batches(load_client)
-    weather_df = fetch_weather_batches(weather_client)
+    load_df = fetch_load_batches(load_client, start, end)
+    weather_df = fetch_weather_batches(weather_client, start, end)
 
     load_df = clean_load(load_df)
 
