@@ -12,8 +12,6 @@ from retry_requests import retry
 START_DATE = datetime(2025, 1, 1) #year, month, day
 END_DATE = datetime(2025, 2, 1)
 
-"""Extract Load data"""
-
 def get_load_client():
     client = GridStatusClient(
     max_retries=3,        # Maximum retries (default: 5)
@@ -47,11 +45,8 @@ def fetch_load_batches(client, dataset: str,start: datetime,end: datetime, batch
 
         current = batch_end
 
-        #add logic to wait one second as gridstatus throttles requests
-
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
-# Usage
 def fetch_load(client) -> pd.DataFrame:
 
     df = fetch_load_batches(
@@ -76,7 +71,8 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     #aggregate control zones for total SPP load
     df = df.groupby("interval_start_utc", as_index = False).agg(load = ("load", "sum"))
     #set the datetime index and frequecy
-    df.set_index("interval_start_utc", inplace = True)
+    df.rename(columns = {"interval_start_utc": "date"}, inplace= True)
+    df.set_index("date", inplace = True)
     df.index.freq = 'h'
 
     return df
@@ -98,6 +94,7 @@ def fetch_weather(client):
     }
 
     #batch the rest of this?
+    #chunk your API calls by requesting 14-day to 30-day blocks at a time.
     #make request
     responses = client.weather_api(url, params = params)
     response = responses[0]
@@ -116,15 +113,25 @@ def fetch_weather(client):
     }
 
     hourly_data["temperature"] = hourly_temperature_2m
-    hourly_dataframe = pd.DataFrame(data = hourly_data)
+    df = pd.DataFrame(data = hourly_data)
 
-    return hourly_dataframe
+    df.set_index("date", inplace = True)
+    df.index.freq = 'h'
+
+    return df
 
 
-def run():
+def main(csv = False):
 
     load_client = get_load_client()
     weather_client = get_weather_client()
 
     load_df = fetch_load(load_client)
     weather_df = fetch_weather(weather_client)
+
+    load_df = clean_load(load_df)
+
+    load_df.join(weather_df)
+
+if __name__ == '__main__':
+    main()
