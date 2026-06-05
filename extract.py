@@ -11,6 +11,9 @@ from retry_requests import retry
 
 START_DATE = datetime(2025, 1, 1) #year, month, day
 END_DATE = datetime(2025, 2, 1)
+WEATHER_LOCATIONS = {
+    "kansas_city": (39.0997, -94.5786),
+}
 
 def get_load_client():
     client = GridStatusClient(
@@ -22,46 +25,54 @@ def get_load_client():
 
     return client
 
+def get_weather_client(): #No API Key needed
+    cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+    retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+    client = openmeteo_requests.Client(session = retry_session)
+    return client
+
+
+def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
+
+    df = client.get_dataset(
+        "spp_load_hourly",
+        start = start.isoformat(),
+        end = end.isoformat(),
+        columns = ["interval_start_utc", "balancing_area_name", "control_zone_name", "forecast_area_type", "load"],
+        filter_column = "balancing_area_name",
+        filter_value = "SPP",
+    )
+
+    return df
+
+
 #Batch for large queries
-def fetch_load_batches(client, dataset: str,start: datetime,end: datetime, batch_days: int = 7, **kwargs) -> pd.DataFrame:
+def fetch_load_batches(client, batch_days: int = 7) -> pd.DataFrame:
     """Fetch data in batches to avoid timeouts."""
     all_data = []
-    current = start
+    current = START_DATE
 
-    while current < end:
-        batch_end = min(current + timedelta(days=batch_days), end)
+    while current < END_DATE:
+        batch_end = min(current + timedelta(days=batch_days), END_DATE)
 
         print(f"Fetching {current.date()} to {batch_end.date()}...")
 
+        """ Insert fetch_load func here
         data = client.get_dataset(
             dataset,
             start=current.isoformat(),
             end=batch_end.isoformat(),
             **kwargs
         )
+        """
+        batch_df = fetch_load(client, start = current, end = batch_end)
 
-        if len(data) > 0:
-            all_data.append(data)
+        if len(batch_df) > 0:
+            all_data.append(batch_df)
 
         current = batch_end
 
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
-
-def fetch_load(client) -> pd.DataFrame:
-
-    df = fetch_load_batches(
-        client,
-        "spp_load_hourly",
-        START_DATE,
-        END_DATE,
-        batch_days=7,
-        columns = ["interval_start_utc", "balancing_area_name", "control_zone_name", "forecast_area_type", "load"],
-        filter_column = "balancing_area_name",
-        filter_value = "SPP",
-        limit=100
-    )
-
-    return df
 
 def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     #make a copy of dataframe?
@@ -77,25 +88,19 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def get_weather_client(): #No API Key needed
-    cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-    retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-    client = openmeteo_requests.Client(session = retry_session)
-    return client
 
-def fetch_weather(client):
+#make one request to weather API and return DF
+def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
     url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+    lat,lon = WEATHER_LOCATIONS["kansas_city"]
     params = {
-    	"latitude": 39.0997,
-    	"longitude": -94.5786,
-    	"start_date": START_DATE.strftime("%Y-%m-%d"),
-    	"end_date": END_DATE.strftime("%Y-%m-%d"),
+    	"latitude": lat,
+    	"longitude": lon,
+    	"start_date": start.strftime("%Y-%m-%d"),
+    	"end_date": end.strftime("%Y-%m-%d"),
     	"hourly": "temperature_2m",
     }
 
-    #batch the rest of this?
-    #chunk your API calls by requesting 14-day to 30-day blocks at a time.
-    #make request
     responses = client.weather_api(url, params = params)
     response = responses[0]
 
@@ -120,18 +125,41 @@ def fetch_weather(client):
 
     return df
 
+def fetch_weather_batches(client, batch_days: int = 30) -> pd.DataFrame:
+    """Fetch weather in batches to avoid timeouts."""
+    all_data = []
+    current = START_DATE
 
-def main(csv = False):
+    while current < END_DATE:
+        batch_end = min(current + timedelta(days=batch_days), END_DATE)
+
+        print(f"Fetching weather {current.date()} to {batch_end.date()}...")
+
+        # Temporarily override dates for this batch
+        batch_df = fetch_weather(client, start=current, end=batch_end)
+        all_data.append(batch_df)
+
+        current = batch_end
+
+    return pd.concat(all_data) if all_data else pd.DataFrame()
+
+
+def fetch_all_data():
 
     load_client = get_load_client()
     weather_client = get_weather_client()
 
-    load_df = fetch_load(load_client)
-    weather_df = fetch_weather(weather_client)
+    load_df = fetch_load_batches(load_client)
+    weather_df = fetch_weather_batches(weather_client)
 
     load_df = clean_load(load_df)
 
-    load_df.join(weather_df)
+    df = load_df.join(weather_df)
+
+    return df
 
 if __name__ == '__main__':
-    main()
+    path = "data/raw/"
+    os.makedirs(path, exist_ok= True)
+    df = fetch_all_data()
+    df.to_csv(os.path.join(path, "tempload.csv"), index = True)
