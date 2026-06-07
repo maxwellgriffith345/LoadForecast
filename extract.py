@@ -2,9 +2,10 @@ import sys
 import os
 import pandas as pd
 from datetime import datetime, timedelta
-from config import GRIDSTATUS_API_KEY
+from config import GRIDSTATUS_API_KEY, EIA_KEY
 from gridstatusio import GridStatusClient
 import openmeteo_requests
+import requests
 import requests_cache
 from retry_requests import retry
 
@@ -88,6 +89,82 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     return df
 """
 
+# --- EIA Load Pull ---
+# TODO: double check date format
+# EIA's API accepts YYYY-MM-DD for hourly data or prefers YYYY-MM-DDTHH
+def make_request(name: str, route: str, params: dict, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 30) -> pd.DataFrame:
+    all_dfs = []
+    current = start
+
+    while current < end:
+        batch_end = min(current + timedelta(days=batch_days), end)
+
+        # EIA expects "YYYY-MM-DD" format for daily batching
+        params["start"]  = current.strftime("%Y-%m-%d")
+        params["end"]    = batch_end.strftime("%Y-%m-%d")
+        params["offset"] = 0
+        params["length"] = 5000
+        batch_rows = []
+        print(f"  {name} {current.date()} to {batch_end.date()}: starting...")
+
+        while True:
+            for attempt in range(3):
+                try:
+                    response = requests.get(route, params=params)
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.HTTPError as e:
+                    if response.status_code in (500, 502, 503, 504):
+                        wait = 2 ** attempt
+                        print(f"    Server error attempt {attempt + 1}, retrying in {wait}s...")
+                        time.sleep(wait)
+                    else:
+                        raise
+            else:
+                raise Exception(f"Failed after 3 attempts — {name} {current.date()} offset {params['offset']}")
+
+            data = response.json()
+            rows = data["response"]["data"]
+            total = int(data["response"]["total"])
+            if not rows:
+                break
+            batch_rows.extend(rows)
+            print(f"  {name} {current.date()} to {batch_end.date()}: fetched {len(batch_rows)} / {total} rows")
+            if len(batch_rows) >= total:
+                break
+            params["offset"] += 5000
+            time.sleep(0.5)
+
+        all_dfs.append(pd.DataFrame(batch_rows))
+        print(f"  {name} {current.date()} to {batch_end.date()}: complete")
+        current = batch_end+timedelta(days=1)
+
+    return pd.concat(all_dfs, ignore_index=True)
+
+
+def fetch_EIA_load(start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 30) -> pd.DataFrame:
+    name = "load"
+    url = "https://api.eia.gov/v2/electricity/rto/region-data/data/"
+    params = {
+        "frequency": "hourly",
+        "data[0]": "value",
+        "facets[respondent][]": "SWPP",
+        "facets[type][]": "D",
+        "sort[0][column]": "period",
+        "sort[0][direction]": "asc",
+        "api_key": EIA_KEY
+    }
+    df = make_request(name, url, params, start=start, end=end, batch_days=batch_days)
+    return df
+
+def clean_EIA_load(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["period"] = pd.to_datetime(df["period"], format="%Y-%m-%dT%H", utc=True)
+    df = df.set_index("period")
+    df.index.name = "date"
+    df.index.freq = "h"
+    return df[["value"]]
+
 #make one request to weather API and return DF
 def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
     url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -146,16 +223,17 @@ def fetch_weather_batches(client, start: datetime = START_DATE, end: datetime = 
 
 def fetch_all_data(start: datetime = START_DATE, end: datetime = END_DATE):
 
-    load_client = get_load_client()
+    #load_client = get_load_client()
     weather_client = get_weather_client()
 
     print("Fetching load...")
-    load_df = fetch_load_batches(load_client, start, end)
-
+    #load_df = fetch_load_batches(load_client, start, end)
+    load_df = fetch_EIA_load(start, end)
     print ("Fetching weather...")
     weather_df = fetch_weather_batches(weather_client, start, end)
 
-    load_df = clean_load(load_df)
+    #load_df = clean_load(load_df)
+    load_df = clean_EIA_load(load_df)
 
     print("Joining load and weather...")
     df = load_df.join(weather_df)
