@@ -9,12 +9,22 @@ import requests_cache
 from retry_requests import retry
 
 
-START_DATE = datetime(2025, 1, 1) #year, month, day
-END_DATE = datetime(2025, 2, 1)
+START_DATE = datetime(2023, 1, 1) #year, month, day
+END_DATE = datetime(2025, 12, 31)
 WEATHER_LOCATIONS = {
     "kansas_city": (39.0997, -94.5786),
 }
 
+
+
+def get_weather_client(): #No API Key needed
+    cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+    retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+    client = openmeteo_requests.Client(session = retry_session)
+    return client
+
+# --- GridStatus (commented out, hit API limit) ---
+"""
 def get_load_client():
     client = GridStatusClient(
     max_retries=3,        # Maximum retries (default: 5)
@@ -24,14 +34,6 @@ def get_load_client():
     )
 
     return client
-
-def get_weather_client(): #No API Key needed
-    cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-    retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-    client = openmeteo_requests.Client(session = retry_session)
-    return client
-
-
 def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
 
     df = client.get_dataset(
@@ -47,8 +49,13 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -
 
 
 #Batch for large queries
-def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 7) -> pd.DataFrame:
-    """Fetch data in batches to avoid timeouts."""
+#TODO fix: HTTP 429: Too Many Requests. Limit: 30 per 1 minute.. Exceeded maximum number of retries
+# Exception: Error 403: {"detail":"Rows exported limit reached.  Usage: 758,020, Limit: 500,000. Please visit your account settings or contact us to upgrade."}
+#Let's just use the EIA data set
+#https://www.eia.gov/opendata/browser/electricity/rto/region-data?frequency=hourly&data=value;&facets=respondent;type;&respondent=SWPP;&type=D;&start=2025-01-01T00&end=2025-01-02T00&sortColumn=period;&sortDirection=desc;
+
+def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 60) -> pd.DataFrame:
+
     all_data = []
     current = start
 
@@ -57,14 +64,6 @@ def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END
 
         print(f"Fetching {current.date()} to {batch_end.date()}...")
 
-        """ Insert fetch_load func here
-        data = client.get_dataset(
-            dataset,
-            start=current.isoformat(),
-            end=batch_end.isoformat(),
-            **kwargs
-        )
-        """
         batch_df = fetch_load(client, start = current, end = batch_end)
 
         if len(batch_df) > 0:
@@ -87,7 +86,7 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df.index.freq = 'h'
 
     return df
-
+"""
 
 #make one request to weather API and return DF
 def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
@@ -150,13 +149,18 @@ def fetch_all_data(start: datetime = START_DATE, end: datetime = END_DATE):
     load_client = get_load_client()
     weather_client = get_weather_client()
 
+    print("Fetching load...")
     load_df = fetch_load_batches(load_client, start, end)
+
+    print ("Fetching weather...")
     weather_df = fetch_weather_batches(weather_client, start, end)
 
     load_df = clean_load(load_df)
 
+    print("Joining load and weather...")
     df = load_df.join(weather_df)
 
+    print("Data pull complete")
     return df
 
 if __name__ == '__main__':
