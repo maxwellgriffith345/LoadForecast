@@ -32,16 +32,24 @@ use SKLearn to forecast SPP load
   - TODO: make a note of train/validation split e.g. 2023–2024 train, Q1 2025 val, Q2–Q4 2025 test
 - **Deliverables**:
   - data.py script to pull all data (load and weather) into csv file
+- Challenge
+  - I hit the rate limit in the gridstatus api
+  - Switched to using the EIA Open data api
+  - the grid status api is more robust with built in retry logic and error catching
 
 ## 1.5: Exploratory Data
  - notebook showing load patterns (daily, weekly, seasonal cycles), the OKC/KC temperature correlation with load, and the demand peaks
 
 ## 2. Feature Engineering
-- Sunlight-Related Features: astral package (see example doc)
 - Extract Calendar Features
 - Cyclical Encoding (hour of day ect)
+  - [ML Mastery Cyclic Features](https://machinelearningmastery.com/7-pandas-tricks-for-time-series-feature-engineering/)
+  - [Kaggle Cyclic Feautres](https://www.kaggle.com/code/avanwyk/encoding-cyclical-features-for-deep-learning)
+  - [ML Pills Cyclic Encoding](https://mlpills.substack.com/p/issue-89-encoding-cyclical-features)
+  - [Cyclic Encoding for NN](https://medium.com/@dhanyahari07/improving-time-series-prediction-models-using-cyclic-features-encoding-in-neural-networks-0eebef307fc2)
 - Window features (running averages)
-- Federal Holiday indicators (where do I pull this info?)
+- Federal Holidays
+- Sunlight-Related Features: astral package (see example doc)
 - Lagged target variables (auto-regressive model)
 - heating/cooling degree days (what is this?)
 - **Deliverables**:
