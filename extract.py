@@ -174,15 +174,16 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     	"longitude": lon,
     	"start_date": start.strftime("%Y-%m-%d"),
     	"end_date": end.strftime("%Y-%m-%d"),
-    	"hourly": "temperature_2m",
+    	"hourly": ["temperature_2m", "is_day"]
     }
-
+        #"timezone": "America/Chicago"
     responses = client.weather_api(url, params = params)
     response = responses[0]
 
     #Process hourly data
     hourly = response.Hourly()
     hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
+    hourly_is_day = hourly.Variables(1).ValuesAsNumpy()
 
     hourly_data = {
 	"date": pd.date_range(
@@ -194,6 +195,7 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     }
 
     hourly_data["temperature"] = hourly_temperature_2m
+    hourly_data["is_day"] = hourly_is_day
     df = pd.DataFrame(data = hourly_data)
 
     df.set_index("date", inplace = True)

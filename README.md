@@ -30,6 +30,7 @@ use SKLearn to forecast SPP load
   - We will select three weather locatoins to pull temperture data from and then refine during the feature selection process
   - Oklahoma City, Kansas City,Sioux Falls
   - TODO: make a note of train/validation split e.g. 2023–2024 train, Q1 2025 val, Q2–Q4 2025 test
+  - we will also pull the hourly boolean "is day" which gives aprox sunrise/sunset times
 - **Deliverables**:
   - data.py script to pull all data (load and weather) into csv file
 - Challenge
@@ -49,7 +50,9 @@ use SKLearn to forecast SPP load
   - [Cyclic Encoding for NN](https://medium.com/@dhanyahari07/improving-time-series-prediction-models-using-cyclic-features-encoding-in-neural-networks-0eebef307fc2)
 - Window features (running averages)
 - Federal Holidays
-- Sunlight-Related Features: astral package (see example doc)
+- Sunlight-Related Features:
+  -  we will pull the bool "is_day" from the weather API
+  - astral package (see example doc)
 - Lagged target variables (auto-regressive model)
 - heating/cooling degree days (what is this?)
 - **Deliverables**:
