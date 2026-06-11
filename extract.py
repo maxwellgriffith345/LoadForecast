@@ -218,7 +218,7 @@ def fetch_weather_batches(client, start: datetime = START_DATE, end: datetime = 
         batch_df = fetch_weather(client, start=current, end=batch_end)
         all_data.append(batch_df)
 
-        current = batch_end
+        current = batch_end+timedelta(days=1)
 
     return pd.concat(all_data) if all_data else pd.DataFrame()
 
