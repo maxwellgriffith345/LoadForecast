@@ -163,7 +163,8 @@ def clean_EIA_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.set_index("period")
     df.index.name = "date"
     df.index.freq = "h"
-    return df[["value"]]
+    df.rename(columns = {"value": "Demand"}, inplace = True)
+    return df[["Demand"]]
 
 #make one request to weather API and return DF
 def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
@@ -194,7 +195,7 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
         )
     }
 
-    hourly_data["temperature"] = hourly_temperature_2m
+    hourly_data["Temperature"] = hourly_temperature_2m
     hourly_data["is_day"] = hourly_is_day
     df = pd.DataFrame(data = hourly_data)
 
