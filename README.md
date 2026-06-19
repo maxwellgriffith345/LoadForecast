@@ -28,7 +28,7 @@ use SKLearn to forecast SPP load
   - make sure to train on on the historical forecast not the actuals
   - SPP has a large north/south footprint cover North Dakota to Oklahoma
   - We will select three weather locatoins to pull temperture data from and then refine during the feature selection process
-  - Oklahoma City, Kansas City,Sioux Falls
+  -  Kansas City
   - TODO: make a note of train/validation split e.g. 2023–2024 train, Q1 2025 val, Q2–Q4 2025 test
   - we will also pull the hourly boolean "is day" which gives aprox sunrise/sunset times
 - **Deliverables**:
@@ -55,6 +55,12 @@ use SKLearn to forecast SPP load
   - astral package (see example doc)
 - Lagged target variables (auto-regressive model)
 - heating/cooling degree days (what is this?)
+- Exogenous Variables
+  - created a features.py with functions to set the holiday and calendar features month, week, day of week and hour, and turning those calendar features into cyclic features with sin and cos sin componenents
+  - I import those and pipe them on the data frame.
+  - I also include a 3 day centered average temperture feature
+  - this is in a jupyter notebook in /notebooks/Train
+  - possible extensions is to create polynomial features and add additional averages and daylight features such as hours a a day
 - **Deliverables**:
   - features.py file that creates that needed features
 
