@@ -10,7 +10,7 @@ use SKLearn to forecast SPP load
 
 [SKForecast Load Forecasting](https://cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python#Exogenous_variables%5D)
 
-Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Javier Escobar Ortiz, available under Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0 DEED) at https://www.cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python.html 
+Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Javier Escobar Ortiz, available under Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0 DEED) at https://www.cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python.html
 
 ## 1. Build Data Set
 - Data window: 3 years 2023-1-1 to 2025-12-31
@@ -68,6 +68,12 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 
 ## 3. Feature Selection
 - use a simple model (gradient boost) and a small set of the data
+- working in notebooks/Train
+- used recursive feature selection from Scikit-learn
+- of the 26 features available on13 were selected
+- lags: [1, 2, 3, 23, 25, 47]
+- No window feature was selected- only tested a 3 day window feature
+- and the exogenous variables were ['Temperature', 'week', 'day_of_week', 'hour', 'hour_sin', 'hour_cos', 'Temp_3D_Mean']
 - TODO: more detail on the method here
 
 ## 4. Train and Compare
