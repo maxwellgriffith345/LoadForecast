@@ -10,6 +10,8 @@ use SKLearn to forecast SPP load
 
 [SKForecast Load Forecasting](https://cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python#Exogenous_variables%5D)
 
+Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Javier Escobar Ortiz, available under Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0 DEED) at https://www.cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python.html 
+
 ## 1. Build Data Set
 - Data window: 3 years 2023-1-1 to 2025-12-31
 - Target
