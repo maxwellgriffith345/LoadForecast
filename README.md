@@ -76,6 +76,14 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 - and the exogenous variables were ['Temperature', 'week', 'day_of_week', 'hour', 'hour_sin', 'hour_cos', 'Temp_3D_Mean']
 - TODO: more detail on the method here
 
+## 3.5 Model Tuning
+- used bayesian_search
+- Tuned the follow parameters
+  - number of estimators
+  - max depth
+  - learning rate
+  - reg alpha and reg lambda
+
 ## 4. Train and Compare
 - naive base line
 - specify error metric
