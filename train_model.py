@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -55,7 +56,8 @@ data = (data
            )
 
 #list of exogenous variables
-exo_vars = list(data.columns)[1:]
+#exo_vars = list(data.columns)[1:]
+exo_vars = [col for col in data.columns if col != "Demand"]
 
 print("Exogenous features created")
 
@@ -78,9 +80,10 @@ ar_week_forecaster = ForecasterRecursive(
 ar_week_forecaster.fit(y=data.loc[:VAL_END, 'Demand'])
 
 lags_df = ar_week_forecaster.get_feature_importances(sort_importance=True).head(40)
-lags_df["lags"] = lags_df["feature"].str.strip("lag_").astype(int)
+lags_df["lags"] = lags_df["feature"].str.replace("lag_", "", regex=False).astype(int)
 top_lags = lags_df.lags.to_list()[:15]
-top_lags.append(24)
+if 24 not in top_lags:
+    top_lags.append(24)
 
 print("Top lags selected")
 
@@ -110,13 +113,14 @@ lags_select, window_features_select, exog_select = select_features(
     y               = data_train['Demand'],
     exog            = data_train[exo_vars],
     select_only     = None,
-    force_inclusion = None,
+    force_inclusion = ["lag_24", "Holiday"],
     random_state    = 123,
     verbose         = True,
 )
 
 print("Best features selected")
-
+print(f"Lags selected: {len(lags_select)}")
+print(f"Exog selected: {len(exog_select)}")
 
 #Hyper Parameter Tuning
 tuned_forecaster = ForecasterRecursive(
@@ -149,7 +153,7 @@ results_search, frozen_trial = bayesian_search_forecaster(
                                    cv           = cv_search,
                                    metric       = 'mean_absolute_error',
                                    search_space = search_space,
-                                   n_trials     = 10,  # Increase for more exhaustive search
+                                   n_trials     = 30,  # Increase for more exhaustive search
                                    return_best  = True
                                )
 print("Model tuning complete")
@@ -170,6 +174,9 @@ metric, predictions = backtesting_forecaster(
                       )
 print(f"Final model mean absolute error {metric}")
 
+
 # Save the Model
+os.makedirs("model", exist_ok=True)
+results_search.to_csv("model/tuning_results.csv", index=False)
 save_forecaster(tuned_forecaster, file_name='model/forecaster_001.joblib', verbose=False)
 print("Model saved")
