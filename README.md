@@ -42,6 +42,11 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 
 ## 1.5: Exploratory Data
  - notebook showing load patterns (daily, weekly, seasonal cycles), the OKC/KC temperature correlation with load, and the demand peaks
+ - Data cleaning
+   - issue with streches of flat demand
+   - entire weeks were flat or sections fo weeks were flat
+   - had to detect weekyl variance and streches of repeated values
+   - we then have to figure out what to do with those weeks
 
 ## 2. Feature Engineering
 - Extract Calendar Features
