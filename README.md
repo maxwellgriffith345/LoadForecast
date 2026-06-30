@@ -40,13 +40,38 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - Switched to using the EIA Open data api
   - the grid status api is more robust with built in retry logic and error catching
 
-## 1.5: Exploratory Data
+## 1.5: Exploratory Data Analysis/ Data Cleaning
  - notebook showing load patterns (daily, weekly, seasonal cycles), the OKC/KC temperature correlation with load, and the demand peaks
  - Data cleaning
    - issue with streches of flat demand
    - entire weeks were flat or sections fo weeks were flat
    - had to detect weekyl variance and streches of repeated values
    - we then have to figure out what to do with those weeks
+ - SKForecast with specific estimators has built-in support for training with NA data [SKForecast NaN](https://skforecast.org/latest/user_guides/handling-missing-values)
+   - ForecasterRecurisve has dropna_from_series
+   -  requires a complete timeseries index
+   -  use np.nan
+ - Option 1 Let Estimator Handle NA Value
+   - LightGBM (LGBMRegressor, LGBMClassifier) can handle NA values
+   - can keep dropna_from_series=False
+   - con's
+   - estimators learns the missingness pattern
+   - The model implicitly treats NaN as a special split value, which may not always be optima
+ - Option 2 Drop rows with NaN in the forecaster
+   - in the forecaster set dropna_from_series = True
+   - removes rows from X_train, y_train that contain NaN values before fitting
+   - this will impact the lags, the longer the lags the more data will be dropped surrouding those lags?
+   - observations within or near NaN gaps (depending on lag window) are discarded
+ - Option 3: Imputation + Weighted forecasting
+   - impute missing values with interpolation
+   - down-weight the imputed observations during training with weight_func
+   - [SKForecast impute and weight](https://skforecast.org/latest/faq/forecasting-time-series-with-missing-values.html)
+ - We will use option 1 and option 3 and compare performance
+ - So we will set the flat runs to NaN and first let LightGMB hanlde the NaN and then fill and weight the NaNs and rerun
+ - when creating a weighted mask they values will still be used to create the lagged features but the model won't be penalized for getting the predicted values for the data weighted at zero wrong
+ - Issue with just passing NaN values to LightGBM is that it is difficult to cross validate if the NaNs are spread throughout the datasets
+ - You can't backtest over a range that has NaNs because you can't calcualte the error
+ - It is also not great to train a model with NaNs if the NaNs are not a emergent pattern but just random data quality issue
 
 ## 2. Feature Engineering
 - Extract Calendar Features
