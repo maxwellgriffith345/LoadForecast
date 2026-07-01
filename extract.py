@@ -8,6 +8,7 @@ import openmeteo_requests
 import requests
 import requests_cache
 from retry_requests import retry
+import time
 
 
 START_DATE = datetime(2023, 1, 1) #year, month, day
@@ -34,7 +35,7 @@ def get_load_client():
     )
 
     return client
-def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
+def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, write_csv = True) -> pd.DataFrame:
 
     df = client.get_dataset(
         "spp_load_hourly",
@@ -45,9 +46,11 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -
         filter_value = "SYSTEM_TOTAL",
     )
 
-    file_name = f"rawgs_{END_DATE.isoformat()[:-9]}.csv"
-    path = "data/raw/"
-    df.to_csv(os.path.join(path, file_name), index = False)
+    if write_csv:
+        file_name = f"rawgs_{end.isoformat()[:-9]}.csv"
+        path = "data/raw/load"
+        os.makedirs(path, exist_ok= True)
+        df.to_csv(os.path.join(path, file_name), index = False)
 
     return df
 
@@ -58,41 +61,80 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -
 #Let's just use the EIA data set
 #https://www.eia.gov/opendata/browser/electricity/rto/region-data?frequency=hourly&data=value;&facets=respondent;type;&respondent=SWPP;&type=D;&start=2025-01-01T00&end=2025-01-02T00&sortColumn=period;&sortDirection=desc;
 
-def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 60) -> pd.DataFrame:
 
+def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 60) -> pd.DataFrame:
     all_data = []
     current = start
-
     while current < end:
         batch_end = min(current + timedelta(days=batch_days), end)
-
         print(f"Fetching {current.date()} to {batch_end.date()}...")
-
-        batch_df = fetch_load(client, start = current, end = batch_end)
-
-        if len(batch_df) > 0:
-            all_data.append(batch_df)
-
+        try:
+            batch_df = fetch_load(client, start=current, end=batch_end)
+            if len(batch_df) > 0:
+                all_data.append(batch_df)
+        except Exception as e:
+            if "429" in str(e):
+                print(f"  Rate limit hit, waiting 60 seconds...")
+                time.sleep(60)
+                # Retry the same batch
+                batch_df = fetch_load(client, start=current, end=batch_end)
+                if len(batch_df) > 0:
+                    all_data.append(batch_df)
+            else:
+                raise
         current = batch_end
+        time.sleep(4)  # Stay under 30 requests/minute
 
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+
+def read_load_csvs(path: str = "data/raw/load") -> pd.DataFrame:
+    files = [f for f in os.listdir(path) if f.endswith(".csv")]
+
+    if not files:
+        raise FileNotFoundError(f"No CSV files found in {path}")
+
+    all_dfs = []
+    for file in files:
+        print(f"Reading {file}...")
+        df = pd.read_csv(os.path.join(path, file))
+        all_dfs.append(df)
+
+    df = pd.concat(all_dfs, ignore_index=True)
+    df.sort_index(inplace = True)
+    print(f"Total rows loaded: {len(df)}")
+
+    return df
 
 def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     #make a copy of dataframe?
     df = df.copy()
     #filter out NC load
-    df = df[df["forecast_area_type"]=="CF"]
     #aggregate control zones for total SPP load
 
     #df = df.groupby("interval_start_utc", as_index = False).agg(load = ("load", "sum"))
     #set the datetime index and frequecy
+    df = df.drop_duplicates()
     df.rename(columns = {"interval_start_utc": "date"}, inplace= True)
     df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%dT%H", utc=True)
     df.set_index("date", inplace = True)
-    df.index.freq = 'h'
 
-    return df
+    #remove time zone info
+    df.index = df.index.tz_localize(None)
+    #df.index.freq = 'h'
 
+    df.rename(columns = {"load": "Demand"}, inplace = True)
+
+    return df[["Demand"]]
+
+def clean_csv_load(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df = df.drop_duplicates()
+    df.rename(columns={"interval_start_utc": "date"}, inplace=True)
+    df["date"] = pd.to_datetime(df["date"], utc=True)  # format inferred from "2025-10-17 05:00:00+00:00"
+    df.set_index("date", inplace=True)
+    df.index = df.index.tz_localize(None)
+    df.rename(columns={"load": "Demand"}, inplace=True)
+    return df[["Demand"]]
 
 # --- EIA Load Pull ---
 # TODO: double check date format
@@ -205,7 +247,8 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     df = pd.DataFrame(data = hourly_data)
 
     df.set_index("date", inplace = True)
-    df.index.freq = 'h'
+    df.index = df.index.tz_localize(None)
+    #df.index.freq = 'h'
 
     return df
 
@@ -231,21 +274,36 @@ def fetch_weather_batches(client, start: datetime = START_DATE, end: datetime = 
 
 def fetch_all_data(start: datetime = START_DATE, end: datetime = END_DATE):
 
-    #load_client = get_load_client()
+    path = "data/raw/"
+    os.makedirs(path, exist_ok= True)
+
     weather_client = get_weather_client()
 
     print("Fetching load...")
+    #Grid Status Fetch
+    #load_client = get_load_client()
     #load_df = fetch_load_batches(load_client, start, end)
-    load_df = fetch_EIA_load(start, end)
+    #load_df = clean_load(load_df)
+
+    #read csv files
+    load_df = read_load_csvs()
+    load_df = clean_csv_load(load_df)
+
+    load_df.to_csv(os.path.join(path, "gsallload.csv"), index = True)
+    #EIA fetch
+    #load_df = fetch_EIA_load(start, end)
+    #load_df = clean_EIA_load(load_df)
+
+
     print ("Fetching weather...")
     weather_df = fetch_weather_batches(weather_client, start, end)
+    weather_df.to_csv(os.path.join(path, "allweather.csv"), index = True)
 
-    #load_df = clean_load(load_df)
-    load_df = clean_EIA_load(load_df)
+
 
     print("Joining load and weather...")
     df = load_df.join(weather_df)
-
+    df.sort_index(inplace=True)
     print("Data pull complete")
     return df
 
@@ -253,4 +311,4 @@ if __name__ == '__main__':
     path = "data/raw/"
     os.makedirs(path, exist_ok= True)
     df = fetch_all_data()
-    df.to_csv(os.path.join(path, "tempload.csv"), index = True)
+    df.to_csv(os.path.join(path, "gstempload.csv"), index = True)
