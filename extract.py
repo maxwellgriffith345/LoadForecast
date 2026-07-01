@@ -83,9 +83,11 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     #filter out NC load
     df = df[df["forecast_area_type"]=="CF"]
     #aggregate control zones for total SPP load
-    df = df.groupby("interval_start_utc", as_index = False).agg(load = ("load", "sum"))
+
+    #df = df.groupby("interval_start_utc", as_index = False).agg(load = ("load", "sum"))
     #set the datetime index and frequecy
     df.rename(columns = {"interval_start_utc": "date"}, inplace= True)
+    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%dT%H", utc=True)
     df.set_index("date", inplace = True)
     df.index.freq = 'h'
 
