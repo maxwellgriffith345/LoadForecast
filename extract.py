@@ -25,7 +25,6 @@ def get_weather_client(): #No API Key needed
     return client
 
 # --- GridStatus (commented out, hit API limit) ---
-"""
 def get_load_client():
     client = GridStatusClient(
     max_retries=3,        # Maximum retries (default: 5)
@@ -42,9 +41,13 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE) -
         start = start.isoformat(),
         end = end.isoformat(),
         columns = ["interval_start_utc", "balancing_area_name", "control_zone_name", "forecast_area_type", "load"],
-        filter_column = "balancing_area_name",
-        filter_value = "SPP",
+        filter_column = "control_zone_name",
+        filter_value = "SYSTEM_TOTAL",
     )
+
+    file_name = f"rawgs_{END_DATE.isoformat()[:-9]}.csv"
+    path = "data/raw/"
+    df.to_csv(os.path.join(path, file_name), index = False)
 
     return df
 
@@ -87,7 +90,7 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df.index.freq = 'h'
 
     return df
-"""
+
 
 # --- EIA Load Pull ---
 # TODO: double check date format
