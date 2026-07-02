@@ -10,14 +10,11 @@ import requests_cache
 from retry_requests import retry
 import time
 
-
 START_DATE = datetime(2023, 1, 1) #year, month, day
 END_DATE = datetime(2026, 1, 1)
 WEATHER_LOCATIONS = {
     "kansas_city": (39.0997, -94.5786),
 }
-
-
 
 def get_weather_client(): #No API Key needed
     cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
@@ -36,7 +33,6 @@ def get_load_client():
 
     return client
 def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, write_csv = True) -> pd.DataFrame:
-
     df = client.get_dataset(
         "spp_load_hourly",
         start = start.isoformat(),
@@ -54,14 +50,7 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, w
 
     return df
 
-
 #Batch for large queries
-#TODO fix: HTTP 429: Too Many Requests. Limit: 30 per 1 minute.. Exceeded maximum number of retries
-# Exception: Error 403: {"detail":"Rows exported limit reached.  Usage: 758,020, Limit: 500,000. Please visit your account settings or contact us to upgrade."}
-#Let's just use the EIA data set
-#https://www.eia.gov/opendata/browser/electricity/rto/region-data?frequency=hourly&data=value;&facets=respondent;type;&respondent=SWPP;&type=D;&start=2025-01-01T00&end=2025-01-02T00&sortColumn=period;&sortDirection=desc;
-
-
 def fetch_load_batches(client, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 60) -> pd.DataFrame:
     all_data = []
     current = start
@@ -137,6 +126,7 @@ def clean_csv_load(df: pd.DataFrame) -> pd.DataFrame:
     return df[["Demand"]]
 
 # --- EIA Load Pull ---
+# DON"T USE BAD DATA
 # TODO: double check date format
 # EIA's API accepts YYYY-MM-DD for hourly data or prefers YYYY-MM-DDTHH
 def make_request(name: str, route: str, params: dict, start: datetime = START_DATE, end: datetime = END_DATE, batch_days: int = 30) -> pd.DataFrame:
@@ -270,7 +260,6 @@ def fetch_weather_batches(client, start: datetime = START_DATE, end: datetime = 
         current = batch_end+timedelta(days=1)
 
     return pd.concat(all_data) if all_data else pd.DataFrame()
-
 
 def fetch_all_data(start: datetime = START_DATE, end: datetime = END_DATE):
 
