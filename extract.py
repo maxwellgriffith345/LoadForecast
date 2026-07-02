@@ -12,7 +12,7 @@ import time
 
 
 START_DATE = datetime(2023, 1, 1) #year, month, day
-END_DATE = datetime(2025, 12, 31)
+END_DATE = datetime(2026, 1, 1)
 WEATHER_LOCATIONS = {
     "kansas_city": (39.0997, -94.5786),
 }
@@ -215,14 +215,14 @@ def clean_EIA_load(df: pd.DataFrame) -> pd.DataFrame:
 
 #make one request to weather API and return DF
 def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
-    url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+    url = "https://archive-api.open-meteo.com/v1/archive"
     lat,lon = WEATHER_LOCATIONS["kansas_city"]
     params = {
     	"latitude": lat,
     	"longitude": lon,
     	"start_date": start.strftime("%Y-%m-%d"),
     	"end_date": end.strftime("%Y-%m-%d"),
-    	"hourly": ["temperature_2m", "is_day"]
+    	"hourly": "temperature_2m",
     }
         #"timezone": "America/Chicago"
     responses = client.weather_api(url, params = params)
@@ -231,7 +231,7 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     #Process hourly data
     hourly = response.Hourly()
     hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
-    hourly_is_day = hourly.Variables(1).ValuesAsNumpy()
+    #hourly_is_day = hourly.Variables(1).ValuesAsNumpy()
 
     hourly_data = {
 	"date": pd.date_range(
@@ -243,7 +243,7 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     }
 
     hourly_data["Temperature"] = hourly_temperature_2m
-    hourly_data["is_day"] = hourly_is_day
+    #hourly_data["is_day"] = hourly_is_day
     df = pd.DataFrame(data = hourly_data)
 
     df.set_index("date", inplace = True)

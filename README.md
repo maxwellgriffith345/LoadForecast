@@ -39,6 +39,7 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - I hit the rate limit in the gridstatus api
   - Switched to using the EIA Open data api
   - the grid status api is more robust with built in retry logic and error catching
+  - Don't use the EIA load it is very error filled and the gridstatus load is a lot cleaner. I modified the script to not the the gridstatus limit
 
 ## 1.5: Exploratory Data Analysis/ Data Cleaning
  - notebook showing load patterns (daily, weekly, seasonal cycles), the OKC/KC temperature correlation with load, and the demand peaks
