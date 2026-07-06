@@ -79,13 +79,17 @@ ar_week_forecaster = ForecasterRecursive(
              )
 ar_week_forecaster.fit(y=data.loc[:VAL_END, 'Demand'])
 
-lags_df = ar_week_forecaster.get_feature_importances(sort_importance=True).head(40)
+lags_df = arweek_forecaster.get_feature_importances(sort_importance=True)
+# Filter to only lag features before extracting lag numbers
+lags_df = lags_df[lags_df["feature"].str.startswith("lag_")]
+
 lags_df["lags"] = lags_df["feature"].str.replace("lag_", "", regex=False).astype(int)
 top_lags = lags_df.lags.to_list()[:15]
+
 if 24 not in top_lags:
     top_lags.append(24)
 
-print("Top lags selected")
+print(top_lags)
 
 #Feature Selection
 #create estimator(solver) and the forecaster (matrix formulation)
