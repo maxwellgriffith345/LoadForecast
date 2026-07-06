@@ -21,7 +21,7 @@ import warnings
 warnings.filterwarnings('once')
 
 #--- Read in data ---
-df = (pd.read_csv("data/raw/loadtempday_clean.csv")
+df = (pd.read_csv("data/raw/gsloadtemp_clean.csv")
         .drop_duplicates()
         .pipe(lambda df: df.set_index(pd.to_datetime(df["date"])))
         .drop(columns = ["date"])
@@ -73,11 +73,11 @@ print(f"Test dates       : {data_test.index.min()} --- {data_test.index.max()}  
 print("Data splits created")
 
 #Get the most important lags
-ar_week_forecaster = ForecasterRecursive(
+arweek_forecaster = ForecasterRecursive(
                  estimator       = LGBMRegressor(random_state=15926, verbose=-1),
                  lags            = 175,
              )
-ar_week_forecaster.fit(y=data.loc[:VAL_END, 'Demand'])
+arweek_forecaster.fit(y=data.loc[:VAL_END, 'Demand'])
 
 lags_df = arweek_forecaster.get_feature_importances(sort_importance=True)
 # Filter to only lag features before extracting lag numbers
@@ -88,6 +88,8 @@ top_lags = lags_df.lags.to_list()[:15]
 
 if 24 not in top_lags:
     top_lags.append(24)
+if 3 not in top_lags:
+    top_lags.append(3)
 
 print(top_lags)
 
@@ -117,7 +119,7 @@ lags_select, window_features_select, exog_select = select_features(
     y               = data_train['Demand'],
     exog            = data_train[exo_vars],
     select_only     = None,
-    force_inclusion = ["lag_24", "Holiday"],
+    force_inclusion = ["lag_24", "lag_3", "Holiday", "week_sin"],
     random_state    = 123,
     verbose         = True,
 )
