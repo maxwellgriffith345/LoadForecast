@@ -24,55 +24,29 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - conforming load is load that changes predictably and mainly driven by env factors like temperture
   - non-conforming does not follow a predictable pattern and is forecast separately and added to the confirming load forecast
   - we will focus on confirming load
+  - we can filter the data to system total which is the agregate of the balancing regions
 - Historical Weather Data:
   - [Open Meteo](https://open-meteo.com/)
   - also use for weather forecast for exogenous variables for predictions
   - make sure to train on on the historical forecast not the actuals
   - SPP has a large north/south footprint cover North Dakota to Oklahoma
-  - We will select three weather locatoins to pull temperture data from and then refine during the feature selection process
-  -  Kansas City
-  - TODO: make a note of train/validation split e.g. 2023–2024 train, Q1 2025 val, Q2–Q4 2025 test
-  - we will also pull the hourly boolean "is day" which gives aprox sunrise/sunset times
+  - but to keep the modeling simple we will seleced Kansas City located in the center of the region
 - **Deliverables**:
-  - data.py script to pull all data (load and weather) into csv file
+  - extract.py script to pull all data (load and weather) into csv file
 - Challenge
   - I hit the rate limit in the gridstatus api
   - Switched to using the EIA Open data api
   - the grid status api is more robust with built in retry logic and error catching
-  - Don't use the EIA load it is very error filled and the gridstatus load is a lot cleaner. I modified the script to not the the gridstatus limit
+  - However the the EIA load it is very error filled and the gridstatus load is a lot cleaner. I modified the script to not the the gridstatus limit
+  - Once the rate limit cleared I reworked the extract script to avoid hitting the limit and save the load pulls while the script to running incase it errors out
 
 ## 1.5: Exploratory Data Analysis/ Data Cleaning
- - notebook showing load patterns (daily, weekly, seasonal cycles), the OKC/KC temperature correlation with load, and the demand peaks
+ - notebook showing load patterns (daily, weekly, seasonal cycles), KC temperature alignment with demand peaks
  - Data cleaning
-   - issue with streches of flat demand
-   - entire weeks were flat or sections fo weeks were flat
-   - had to detect weekyl variance and streches of repeated values
-   - we then have to figure out what to do with those weeks
- - SKForecast with specific estimators has built-in support for training with NA data [SKForecast NaN](https://skforecast.org/latest/user_guides/handling-missing-values)
-   - ForecasterRecurisve has dropna_from_series
-   -  requires a complete timeseries index
-   -  use np.nan
- - Option 1 Let Estimator Handle NA Value
-   - LightGBM (LGBMRegressor, LGBMClassifier) can handle NA values
-   - can keep dropna_from_series=False
-   - con's
-   - estimators learns the missingness pattern
-   - The model implicitly treats NaN as a special split value, which may not always be optima
- - Option 2 Drop rows with NaN in the forecaster
-   - in the forecaster set dropna_from_series = True
-   - removes rows from X_train, y_train that contain NaN values before fitting
-   - this will impact the lags, the longer the lags the more data will be dropped surrouding those lags?
-   - observations within or near NaN gaps (depending on lag window) are discarded
- - Option 3: Imputation + Weighted forecasting
-   - impute missing values with interpolation
-   - down-weight the imputed observations during training with weight_func
-   - [SKForecast impute and weight](https://skforecast.org/latest/faq/forecasting-time-series-with-missing-values.html)
- - We will use option 1 and option 3 and compare performance
- - So we will set the flat runs to NaN and first let LightGMB hanlde the NaN and then fill and weight the NaNs and rerun
- - when creating a weighted mask they values will still be used to create the lagged features but the model won't be penalized for getting the predicted values for the data weighted at zero wrong
- - Issue with just passing NaN values to LightGBM is that it is difficult to cross validate if the NaNs are spread throughout the datasets
- - You can't backtest over a range that has NaNs because you can't calcualte the error
- - It is also not great to train a model with NaNs if the NaNs are not a emergent pattern but just random data quality issue
+   - removing outliers from the Load
+   - checking for anamolies in the data graphing the weeks layered on top of each other
+   - filling small strecthes fo NaN data with linear/time interpolation
+ - note book: EDA
 
 ## 2. Feature Engineering
 - Extract Calendar Features
@@ -83,9 +57,6 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - [Cyclic Encoding for NN](https://medium.com/@dhanyahari07/improving-time-series-prediction-models-using-cyclic-features-encoding-in-neural-networks-0eebef307fc2)
 - Window features (running averages)
 - Federal Holidays
-- Sunlight-Related Features:
-  -  we will pull the bool "is_day" from the weather API
-  - astral package (see example doc)
 - Lagged target variables (auto-regressive model)
 - heating/cooling degree days (what is this?)
 - Exogenous Variables
@@ -93,19 +64,16 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - I import those and pipe them on the data frame.
   - I also include a 3 day centered average temperture feature
   - this is in a jupyter notebook in /notebooks/Train
-  - possible extensions is to create polynomial features and add additional averages and daylight features such as hours a a day
+  - possible extensions is to create polynomial features and add additional averages and daylight features such as hours a a day and inlcude sunlight variables
 - **Deliverables**:
   - features.py file that creates that needed features
 
 ## 3. Feature Selection
+- started by looking at the feature importance from the best model so far then ran a feature select
 - use a simple model (gradient boost) and a small set of the data
 - working in notebooks/Train
 - used recursive feature selection from Scikit-learn
-- of the 26 features available on13 were selected
-- lags: [1, 2, 3, 23, 25, 47]
-- No window feature was selected- only tested a 3 day window feature
-- and the exogenous variables were ['Temperature', 'week', 'day_of_week', 'hour', 'hour_sin', 'hour_cos', 'Temp_3D_Mean']
-- TODO: more detail on the method here
+- the feature selection left out lag 3 and Sin_week from the select which were some of the top importance fetures so we add back in features dropped say the model improved with the additions back in but not when more features were added back
 
 ## 3.5 Model Tuning
 - used bayesian_search
@@ -122,7 +90,12 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 - export the model with joblib
 - dealing with prediction "gap" when are the predictions made
 
-## 5. Production
+## 5. Create Fast API App to serve forecast
+- input data: the date to be forecast
+- return: time series of 24 hours load forecast
+
+
+## 6. Production
 - [SKForecast in Production](https://skforecast.org/latest/user_guides/forecaster-in-production)
 - Create FastAPI app
 - [Google Cloud Run](https://cloud.google.com/run)
