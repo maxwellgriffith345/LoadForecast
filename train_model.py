@@ -180,6 +180,29 @@ metric, predictions = backtesting_forecaster(
                       )
 print(f"Final model mean absolute error {metric}")
 
+"""
+#Back test with one day gap as Gridstatus posts actual load on a 1 day lag
+# Backtesting with gap
+# ==============================================================================
+cv_gap = TimeSeriesFold(
+        steps              = 24,
+        initial_train_size = len(data.loc[:VAL_END]) + 24,
+        refit              = False,
+        gap                = 24,
+)
+
+metric, predictions = backtesting_forecaster(
+                          forecaster = tuned_forecaster,
+                          y          = data['Demand'],
+                          exog       = data[top_exog],
+                          cv         = cv_gap,
+                          metric     = 'mean_absolute_error'
+                      )
+metric
+predictions.head(5)
+"""
+
+
 
 # Save the Model
 os.makedirs("model", exist_ok=True)
