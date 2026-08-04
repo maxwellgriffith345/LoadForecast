@@ -84,3 +84,45 @@ def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE
     #df.index.freq = 'h'
 
     return df
+
+def get_load_client():
+    client = GridStatusClient(
+    max_retries=3,        # Maximum retries (default: 5)
+    base_delay=1.0,       # Base delay in seconds (default: 2.0)
+    exponential_base=1.5, # Exponential backoff multiplier (default: 2.0)
+    api_key = GRIDSTATUS_API_KEY
+    )
+
+# DIFFERENT THAN EXTRACT SCRIPT BECAUSE RECENT LOAD DOES NOT INCLUDE SYSTEM TOTAL
+def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, write_csv=True) -> pd.DataFrame:
+    df = client.get_dataset(
+        "spp_load_hourly",
+        start   = start.isoformat(),
+        end     = end.isoformat(),
+        columns = ["interval_start_utc", "balancing_area_name", "control_zone_name", "forecast_area_type", "load"],
+        filter_column = "balancing_area_name",
+        filter_value  = "SPP",
+    )
+    if write_csv:
+        file_name = f"rawgs_{start.date()}_{end.date()}.csv"
+        path = "data/raw/load"
+        os.makedirs(path, exist_ok=True)
+        df.to_csv(os.path.join(path, file_name), index=False)
+    return df
+
+#INCLUDES STEP TO AGREGATE TO GET THE TOTAL LOAD NUMBER
+def clean_load(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df = df.drop_duplicates()
+    # Filter to actual load only (not forecast)
+    df = df[df["forecast_area_type"] == "CF"]
+    # Sum across all control zones
+    df = (df
+          .groupby("interval_start_utc", as_index=False)
+          .agg(Demand=("load", "sum"))
+    )
+    df["interval_start_utc"] = pd.to_datetime(df["interval_start_utc"], utc=True)
+    df = df.rename(columns={"interval_start_utc": "date"})
+    df = df.set_index("date")
+    df.index = df.index.tz_localize(None)
+    return df[["Demand"]]
