@@ -3,16 +3,13 @@ import sys
 import os
 import pandas as pd
 from datetime import datetime, timedelta
-from config import GRIDSTATUS_API_KEY, EIA_KEY
+from config import GRIDSTATUS_API_KEY
 from gridstatusio import GridStatusClient
 import openmeteo_requests
 import requests
 import requests_cache
 from retry_requests import retry
 import time
-
-
-from features import set_holidays, cal_features, cyclic_features
 from datetime import datetime
 from datetime import timedelta
 
