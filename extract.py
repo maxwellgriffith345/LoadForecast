@@ -30,8 +30,8 @@ def get_load_client():
     exponential_base=1.5, # Exponential backoff multiplier (default: 2.0)
     api_key = GRIDSTATUS_API_KEY
     )
-
     return client
+    
 def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, write_csv = True) -> pd.DataFrame:
     df = client.get_dataset(
         "spp_load_hourly",

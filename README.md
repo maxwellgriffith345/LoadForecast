@@ -111,3 +111,16 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 3. Pull weather data and create exogenous variables
 4. create forecast
 5. serve it somehow?? put it somewhere? - add it to a database to store all the predictions?
+
+Basic Level
+- one contrainer running the app
+- /predict end point
+- If after 6pm returns next day forecast
+- if before 6pm returns todays forecast
+- no data storage
+
+Extension
+- add another contrainer with a database
+- save both the acutal load values and the predicitions
+- saves having to pull a weeks worth of actuals from api
+- can track drift in the predicitions or errors

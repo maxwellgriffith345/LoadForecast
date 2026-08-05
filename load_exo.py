@@ -47,9 +47,10 @@ def get_weather_client(): #No API Key needed
     return client
 
 # CHANGE THIS URL
-def fetch_weather(client, start: datetime = START_DATE, end: datetime = END_DATE) -> pd.DataFrame:
-    url = "https://archive-api.open-meteo.com/v1/archive"
+# Past three months and 7 day forecast from this link
+def fetch_weather(client, start: datetime, end: datetime) -> pd.DataFrame:
     lat,lon = WEATHER_LOCATIONS["kansas_city"]
+    url = "https://api.open-meteo.com/v1/forecast"
     params = {
     	"latitude": lat,
     	"longitude": lon,
@@ -92,9 +93,10 @@ def get_load_client():
     exponential_base=1.5, # Exponential backoff multiplier (default: 2.0)
     api_key = GRIDSTATUS_API_KEY
     )
+    return client
 
 # DIFFERENT THAN EXTRACT SCRIPT BECAUSE RECENT LOAD DOES NOT INCLUDE SYSTEM TOTAL
-def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, write_csv=True) -> pd.DataFrame:
+def fetch_load(client, start: datetime, end: datetime) -> pd.DataFrame:
     df = client.get_dataset(
         "spp_load_hourly",
         start   = start.isoformat(),
@@ -103,11 +105,7 @@ def fetch_load(client, start: datetime = START_DATE, end: datetime = END_DATE, w
         filter_column = "balancing_area_name",
         filter_value  = "SPP",
     )
-    if write_csv:
-        file_name = f"rawgs_{start.date()}_{end.date()}.csv"
-        path = "data/raw/load"
-        os.makedirs(path, exist_ok=True)
-        df.to_csv(os.path.join(path, file_name), index=False)
+
     return df
 
 #INCLUDES STEP TO AGREGATE TO GET THE TOTAL LOAD NUMBER
@@ -116,6 +114,8 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop_duplicates()
     # Filter to actual load only (not forecast)
     df = df[df["forecast_area_type"] == "CF"]
+    #filter out system total if it's there
+    df = df[df["control_zone_name"] != "SYSTEM_TOTAL"]
     # Sum across all control zones
     df = (df
           .groupby("interval_start_utc", as_index=False)
