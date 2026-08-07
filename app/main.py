@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 from skforecast.utils import load_forecaster
 
-from load_exo import make_prediction
+from .load_exo import make_prediction
 
 
 #load model

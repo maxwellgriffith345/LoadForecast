@@ -12,11 +12,19 @@ from retry_requests import retry
 import time
 from datetime import datetime
 from datetime import timedelta
-from features import set_holidays, cal_features, cyclic_features
+from .features import set_holidays, cal_features, cyclic_features
 
 WEATHER_LOCATIONS = {
     "kansas_city": (39.0997, -94.5786),
 }
+
+"""
+ValueError: To make predictions `exog` must start one step ahead of `last_window`.
+    `last_window` ends at : 2026-08-05 22:00:00.
+    `exog` starts at : 2026-08-06 00:00:00.
+    Expected index : 2026-08-05 23:00:00.
+"""
+
 
 def get_date_ranges(day_one = None):
     dates = {}
@@ -106,6 +114,7 @@ def fetch_load(client, start: datetime, end: datetime) -> pd.DataFrame:
     return df
 
 #INCLUDES STEP TO AGREGATE TO GET THE TOTAL LOAD NUMBER
+#need to test this as last_window d
 def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df = df.drop_duplicates()
@@ -122,6 +131,7 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={"interval_start_utc": "date"})
     df = df.set_index("date")
     df.index = df.index.tz_localize(None)
+    df.index.freq = 'h'
     return df[["Demand"]]
 
 def make_prediction(forecaster):
