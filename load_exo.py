@@ -12,6 +12,7 @@ from retry_requests import retry
 import time
 from datetime import datetime
 from datetime import timedelta
+from features import set_holidays, cal_features, cyclic_features
 
 WEATHER_LOCATIONS = {
     "kansas_city": (39.0997, -94.5786),
@@ -43,7 +44,6 @@ def get_weather_client(): #No API Key needed
     client = openmeteo_requests.Client(session = retry_session)
     return client
 
-# CHANGE THIS URL
 # Past three months and 7 day forecast from this link
 def fetch_weather(client, start: datetime, end: datetime) -> pd.DataFrame:
     lat,lon = WEATHER_LOCATIONS["kansas_city"]
@@ -123,3 +123,58 @@ def clean_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.set_index("date")
     df.index = df.index.tz_localize(None)
     return df[["Demand"]]
+
+def make_prediction(forecaster):
+    #get current date and time
+    now = datetime.now()
+
+    """
+    "yesterdays" actual is available until 6pm central
+    so if it is before 6pm predict "todays" load
+    """
+    if now.hour <= 18:
+        now = now - timedelta(days = 1)
+
+    #get the date ranges
+    date_ranges = get_date_ranges(day_one = now)
+
+    #get weather forecast
+    weather_client = get_weather_client()
+    weather_data = fetch_weather(
+                    weather_client,
+                    start = date_ranges["exo_start"],
+                    end = date_ranges["exo_end"]
+    )
+
+    #get the weather features
+    exo_predict = (weather_data
+            .pipe(set_holidays)
+            .pipe(cal_features)
+            .pipe(cyclic_features)
+            .assign(Holiday=lambda d: d["Holiday"].astype(int))
+            .assign(Temp_3D_Mean=lambda d: d["Temperature"].rolling("3D", center = False).mean())
+            .assign(Temp_2D_Max =lambda d: d["Temperature"].rolling("2D", center = False).max())
+            .assign(Temp_2D_Min =lambda d: d["Temperature"].rolling("2D", center = False).min())
+            .assign(Temp_1D_Min =lambda d: d["Temperature"].rolling("1D", center = False).min())
+           )
+
+    #get the load
+    load_client = get_load_client()
+    load_data = fetch_load(
+                load_client,
+                start = date_ranges["lw_start"],
+                end = date_ranges["lw_end"]
+    )
+    lw_data = clean_load(load_data)
+
+    #make predictions
+    predictions = forecaster.predict(
+                    steps = 48,
+                    last_window = lw_data,
+                    exog = exo_predict
+    )
+
+    predictions_out = predictions.reset_index()
+    predictions_out.columns = ["date", "Demand"]
+    predictions_out["date"] = predictions_out["date"].astype(str)
+    return predictions_out.to_dict(orient="records")

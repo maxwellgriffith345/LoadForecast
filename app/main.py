@@ -1,72 +1,37 @@
 #this is where the app goes
 from fastapi import FastAPI
-from pydantic import BaseModel
-import joblib
+from pathlib import Path
 import os
+from skforecast.utils import load_forecaster
 
-class InputData(BaseModel):
-    Date: string
-
-
-def make_prediction(forecaster):
-    #get current date and time
-    now = datetime.now()
-
-    """
-    "yesterdays" actual is available until 6pm central
-    so if it is before 6pm predict "todays" load
-    """
-    if now.hour <= 18:
-        now = now - timedelta(days = 1)
-
-    #get the date ranges
-    date_ranges = get_date_ranges(day_one = now)
-
-    #get weather forecast
-    weather_client = get_weather_client
-    weather_data = fetch_weather(
-                    weather_client,
-                    start = date_ranges["exo_start"]
-                    end = date_ranges["exo_end"]
-    )
-
-    #get the weather features
+from load_exo import make_prediction
 
 
-    #get the load
-    load_client = get_load_client()
-    load_data = fetch_load(
-                load_client,
-                start = date_ranges["lw_start"],
-                end = date_ranges["lw_end"]
-    )
-    lw_data = clean_load(load_data)
+#load model
+#model_path = os.path.join('model', "forecaster_001.joblib")
+MODEL_PATH = Path("model/forecaster_001.joblib")
+#forecaster = load_forecaster(MODEL_PATH, verbose = False, suppress_warnings = True)
 
-    #make predictions
-    predictions = forecaster.predict(
-                    steps = 48,
-                    last_window = lw_data,
-                    exog = exo_predict
-    )
-
-    #change the format to send over json?
-
-
-    return predictions
 
 #create app object with name
 app = FastAPI(title = "Load Forecast")
 
 
-#load model
-model_path = os.path.join('model', "forecaster_001.joblib")
-forecaster = load_forecaster(model_path, verbose = False, suppress_warnings = True)
+@app.on_event("startup")
+def load_model():
+    if not MODEL_PATH.exists():
+        raise RuntimeError(
+                f"Model file not found at {MODEL_PATH}"
+        )
+
+    forecaster = load_forecaster(MODEL_PATH, verbose = False, suppress_warnings = True)
+    app.state.model = forecaster
 
 #prediction endpoint
-@app.post("/predict")
-async def predict(data: InputData):
+@app.get("/predict")
+async def predict():
 
-
+    forecaster = app.state.model
     prediction = make_prediction(forecaster)
 
-    return {}
+    return {"predictions": prediction}
