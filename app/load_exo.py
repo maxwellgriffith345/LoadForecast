@@ -23,6 +23,9 @@ ValueError: To make predictions `exog` must start one step ahead of `last_window
     `last_window` ends at : 2026-08-05 22:00:00.
     `exog` starts at : 2026-08-06 00:00:00.
     Expected index : 2026-08-05 23:00:00.
+
+
+    so last window is off by 1 hour
 """
 
 
@@ -37,7 +40,7 @@ def get_date_ranges(day_one = None):
     #D-1 midnight to D-1 11pm
     lw_start = day_one-timedelta(days = 8)
     dates["lw_start"] = lw_start
-    lw_end = day_one - timedelta(hours = 1)
+    lw_end = day_one
     dates["lw_end"] = lw_end
 
     dates["exo_start"] = day_one
@@ -102,6 +105,8 @@ def get_load_client():
 
 # DIFFERENT THAN EXTRACT SCRIPT BECAUSE RECENT LOAD DOES NOT INCLUDE SYSTEM TOTAL
 def fetch_load(client, start: datetime, end: datetime) -> pd.DataFrame:
+
+    # we pull an aggregate off of interval_start so we need to add one hour to the end of the window
     df = client.get_dataset(
         "spp_load_hourly",
         start   = start.isoformat(),
