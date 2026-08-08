@@ -83,13 +83,6 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
   - learning rate
   - reg alpha and reg lambda
 
-## 4. Train and Compare
-- naive base line
-- specify error metric
-- use a few different estimators (ie LGBMRegressor) to create forecasters
-- export the model with joblib
-- dealing with prediction "gap" when are the predictions made
-
 ## 5. Create Fast API App to serve forecast
 - input data: the date to be forecast
 - return: time series of 24 hours load forecast
@@ -97,20 +90,17 @@ Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Jav
 ## 6. Production
 - [SKForecast in Production](https://skforecast.org/latest/user_guides/forecaster-in-production)
 - Create FastAPI app
-- [Google Cloud Run](https://cloud.google.com/run)
-  - Launch on google cloud run
-- simple monitoring/drift check idea — even just logging predicted vs. actual after the fact shows production maturity
-- Streamlit dashboard to visualize forecasts
+- use a GET request as it doesn't accept an values in the predict method
+- handles pulling today or yesterday based on what time the request is made
 - Previous days for released by Gridstatus at aprox 5pm the day after
-  - need to retrain the model to predict 48 steps keeping the last 24
+  - need to  predict 48 steps keeping the last 24
   - previous day D-1 actual load is released at 6pm on day D we want to forecast day D+1
   - we want the most accurate "previous window" to make predictions
   - adjust training window size and use "gap" in forecaster
-1. Run every day at 6pm
 2. Pull latest actual load from gridstatus
 3. Pull weather data and create exogenous variables
 4. create forecast
-5. serve it somehow?? put it somewhere? - add it to a database to store all the predictions?
+
 
 Basic Level
 - one contrainer running the app
@@ -124,3 +114,7 @@ Extension
 - save both the acutal load values and the predicitions
 - saves having to pull a weeks worth of actuals from api
 - can track drift in the predicitions or errors
+- deploy on google cloud run or other cloud service
+- automate api call when load is updated
+- - simple monitoring/drift check idea — even just logging predicted vs. actual after the fact shows production maturity
+- Streamlit dashboard to visualize forecasts
