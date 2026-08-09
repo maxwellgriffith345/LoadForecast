@@ -12,6 +12,10 @@ skforecast, trained on 3 years of hourly SPP conforming load data (2023–2025) 
 weather and calendar features. The trained model is served via a FastAPI application
 that returns a 48-hour load forecast on demand.
 
+The project was inspired by an example in the skforecast user guide on demand forecasting
+
+_Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Javier Escobar Ortiz, available under Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0 DEED) at https://www.cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python.html_
+
 ## Results
 | Metric | Value |
 |--------|-------|
@@ -31,6 +35,7 @@ that returns a 48-hour load forecast on demand.
 | EDA & Visualization | matplotlib, seaborn |
 | API | FastAPI, Uvicorn |
 | Environment | Python 3.11, Conda |
+|Claude   |[Claude Project Session](https://claude.ai/share/b1118519-ca37-487a-9680-4e7baaffecde)   |
 
 
 ## Data
@@ -54,33 +59,30 @@ of the pull.
 
 **Data Challenges & Dead Ends**
 During development the GridStatus API rate limit was hit, requiring a temporary switch to
-the EIA Open Data API as an alternative source. The EIA data contained significant quality
-issues — flat/stuck demand values persisting across multiple consecutive hours and other
-anomalous readings not present in the GridStatus data. Several approaches were explored
+the EIA Open Data API as an alternative source. The EIA data had significant quality
+issues such as flat/stuck demand values persisting across multiple consecutive hours. Thi issue were not in the GridStatus data. Several approaches were tried
 to work around this including:
 - Flagging flat demand runs using a rolling difference threshold and replacing with NaN
 - Down-weighting anomalous periods during training using skforecast's `weight_func`
   parameter to preserve time series continuity
 
 Once the GridStatus rate limit cleared, the pipeline was reverted to GridStatus as the
-primary data source. The GridStatus data required no anomaly handling — 7 missing hours
+primary data source. The GridStatus data required no anomaly handling other than 7 missing hours
 were identified across the 3-year window, primarily on DST transition dates, and filled
 via time-based interpolation.
 
 ### Weather Data
 Hourly temperature data for Kansas City, MO was sourced from the Open-Meteo API.
-Kansas City was selected as a single representative location given SPP's large north-south
-footprint spanning North Dakota to Oklahoma. Additional weather locations (Oklahoma City,
-Sioux Falls) were considered but deferred pending feature selection results.
+SPPs region has a large north-south spread so Kansas City has slected as a selected weather location close to the middle of the region. Other weather locations in the north and south were considered but not added to simplfy the feature selection process
+
 
 - Training data used the **archive API** (`archive-api.open-meteo.com`) for complete
 historical coverage
 - Production forecasts use the **forecast API** (`api.open-meteo.com`) for forward-looking
 temperature inputs
 
-**Note:** The model is trained on observed temperature actuals. In production, forecasted
-temperature values are used as exogenous inputs, meaning real-world performance may differ
-slightly from backtested results due to temperature forecast error.
+**Note:** The model is trained on historical weather forecasts not actuals to try to mitage any noise in the difference between wweather forecast and real values. In production, forecasted
+temperature values are used as exogenous inputs
 
 ### Final Dataset
 - 26,304 hourly observations (January 2023 – December 2025)
@@ -124,12 +126,11 @@ Raw calendar features were sine/cosine encoded to preserve their cyclical nature
 | `Temp_1D_Min` | 1-day rolling minimum temperature |
 
 Rolling temperature features capture the lagged effect of sustained heat or cold on
-energy demand — HVAC-driven load responds to temperature trends over multiple days,
-not just the current hour.
+energy demand
 
 ### Autoregressive Lags
 Lagged demand values were selected by training an initial autoregressive model over
-a 175-lag window and extracting the top 15 most important lags by feature importance,
+a 175-lag window and selecting the top 15 most important lags by feature importance,
 with `lag_24` (same hour yesterday) force-included. Final lags selected:
 
 ```python
@@ -150,8 +151,7 @@ the time series specific logic of constructing lag features, managing the foreca
 horizon, and iterating predictions forward step by step.
 
 In a recursive forecaster, each predicted value is fed back as an input to predict
-the next step — this allows forecasting arbitrary horizons from a single model at
-the cost of compounding prediction error over longer horizons.
+the next step so a single model can be used for forecasting any time horizons but the forecast error will compound at each step
 
 ### Train / Validation / Test Split
 All splits are strictly chronological to prevent data leakage.
@@ -176,7 +176,7 @@ parameters were tuned:
 | `reg_lambda` | 0 – 1 |
 
 ### Backtesting
-Final model performance was evaluated on the held-out 2025 test set using
+Final model performance was evaluated using
 skforecast's `backtesting_forecaster` with a 24-step forecast horizon and a
 growing training window. This simulates realistic production conditions where
 the model predicts one day ahead using all available historical data.
@@ -187,8 +187,6 @@ the model predicts one day ahead using all available historical data.
 | MAE | 910 MW |
 | MAPE | 2.75% |
 
-A MAPE of 2.75% is competitive with industry benchmarks for day-ahead hourly
-load forecasting, which typically range from 1–3% for large balancing authorities.
 
 ## API
 
@@ -294,10 +292,6 @@ API docs available at `http://localhost:8000/docs`
 - **Single weather location** — only Kansas City temperature is used. SPP spans
   North Dakota to Oklahoma and a single location may not capture regional demand
   drivers in the northern or southern extremes of the footprint
-- **Temperature actuals vs. forecasts** — the model was trained on observed
-  temperature actuals from the Open-Meteo archive API. In production, forecasted
-  temperatures are used as inputs, meaning real-world performance may differ from
-  backtested results due to temperature forecast error
 - **No data persistence** — the API pulls fresh data on every request with no
   local storage. This increases latency and API dependency at request time
 - **Local deployment only** — the app is not currently deployed to a cloud
