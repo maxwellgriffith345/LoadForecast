@@ -12,3 +12,11 @@ requests-cache
 retry-requests
 scipy
 statsmodels
+scikit-learn
+lightgbm
+skforecast
+fastapi
+uvicorn
+joblib
+holidays
+seaborn

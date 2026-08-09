@@ -1,120 +1,320 @@
-# Using Machine Learning for Load Forecasting
-Forecast SPP Load
-what is SPP?
-Why would it be of interest to forecast it's load?
+# SPP Hourly Load Forecasting with Machine Learning
 
-[SPP Site](https://spp.org/)
-[SPP Map (Prices)](https://pricecontourmap.spp.org/pricecontourmap/)
+## Overview
+Southwest Power Pool (SPP) is a regional transmission organization (RTO) that manages
+the electric grid across 14 states from North Dakota to Oklahoma, serving over 20 million
+customers. Accurate load forecasting is critical for grid reliability, energy trading,
+and resource planning — even small forecast errors at SPP's scale translate to significant
+operational costs.
 
-use SKLearn to forecast SPP load
+This project builds an end-to-end hourly load forecasting pipeline using LightGBM and
+skforecast, trained on 3 years of hourly SPP conforming load data (2023–2025) with
+weather and calendar features. The trained model is served via a FastAPI application
+that returns a 48-hour load forecast on demand.
 
-[SKForecast Load Forecasting](https://cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python#Exogenous_variables%5D)
-
-Forecasting energy demand with machine learning by Joaquín Amat Rodrigo and Javier Escobar Ortiz, available under Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0 DEED) at https://www.cienciadedatos.net/documentos/py29-forecasting-electricity-power-demand-python.html
-
-## 1. Build Data Set
-- Data window: 3 years 2023-1-1 to 2025-12-31
-- Target
-  - SPP Load Data: [Grid Status API](https://www.gridstatus.io/products/api)
-  - [GS Data Catalog](https://www.gridstatus.io/datasets?filter=load&source=spp)
-  - Load Hourly [GS API](https://www.gridstatus.io/datasets/spp_load_hourly)
-  - [Python Client for GS API](https://github.com/gridstatus/gridstatusio)
-  - [Grid Status Dev Best Practices](https://docs.gridstatus.io/developers/concepts/best-practices#python)
-  - There are two forecast types: Conforming load and non-conforming Load
-  - conforming load is load that changes predictably and mainly driven by env factors like temperture
-  - non-conforming does not follow a predictable pattern and is forecast separately and added to the confirming load forecast
-  - we will focus on confirming load
-  - we can filter the data to system total which is the agregate of the balancing regions
-- Historical Weather Data:
-  - [Open Meteo](https://open-meteo.com/)
-  - also use for weather forecast for exogenous variables for predictions
-  - make sure to train on on the historical forecast not the actuals
-  - SPP has a large north/south footprint cover North Dakota to Oklahoma
-  - but to keep the modeling simple we will seleced Kansas City located in the center of the region
-- **Deliverables**:
-  - extract.py script to pull all data (load and weather) into csv file
-- Challenge
-  - I hit the rate limit in the gridstatus api
-  - Switched to using the EIA Open data api
-  - the grid status api is more robust with built in retry logic and error catching
-  - However the the EIA load it is very error filled and the gridstatus load is a lot cleaner. I modified the script to not the the gridstatus limit
-  - Once the rate limit cleared I reworked the extract script to avoid hitting the limit and save the load pulls while the script to running incase it errors out
-
-## 1.5: Exploratory Data Analysis/ Data Cleaning
- - notebook showing load patterns (daily, weekly, seasonal cycles), KC temperature alignment with demand peaks
- - Data cleaning
-   - removing outliers from the Load
-   - checking for anamolies in the data graphing the weeks layered on top of each other
-   - filling small strecthes fo NaN data with linear/time interpolation
- - note book: EDA
-
-## 2. Feature Engineering
-- Extract Calendar Features
-- Cyclical Encoding (hour of day ect)
-  - [ML Mastery Cyclic Features](https://machinelearningmastery.com/7-pandas-tricks-for-time-series-feature-engineering/)
-  - [Kaggle Cyclic Feautres](https://www.kaggle.com/code/avanwyk/encoding-cyclical-features-for-deep-learning)
-  - [ML Pills Cyclic Encoding](https://mlpills.substack.com/p/issue-89-encoding-cyclical-features)
-  - [Cyclic Encoding for NN](https://medium.com/@dhanyahari07/improving-time-series-prediction-models-using-cyclic-features-encoding-in-neural-networks-0eebef307fc2)
-- Window features (running averages)
-- Federal Holidays
-- Lagged target variables (auto-regressive model)
-- heating/cooling degree days (what is this?)
-- Exogenous Variables
-  - created a features.py with functions to set the holiday and calendar features month, week, day of week and hour, and turning those calendar features into cyclic features with sin and cos sin componenents
-  - I import those and pipe them on the data frame.
-  - I also include a 3 day centered average temperture feature
-  - this is in a jupyter notebook in /notebooks/Train
-  - possible extensions is to create polynomial features and add additional averages and daylight features such as hours a a day and inlcude sunlight variables
-- **Deliverables**:
-  - features.py file that creates that needed features
-
-## 3. Feature Selection
-- started by looking at the feature importance from the best model so far then ran a feature select
-- use a simple model (gradient boost) and a small set of the data
-- working in notebooks/Train
-- used recursive feature selection from Scikit-learn
-- the feature selection left out lag 3 and Sin_week from the select which were some of the top importance fetures so we add back in features dropped say the model improved with the additions back in but not when more features were added back
-
-## 3.5 Model Tuning
-- used bayesian_search
-- Tuned the follow parameters
-  - number of estimators
-  - max depth
-  - learning rate
-  - reg alpha and reg lambda
-
-## 5. Create Fast API App to serve forecast
-- input data: the date to be forecast
-- return: time series of 24 hours load forecast
-
-## 6. Production
-- [SKForecast in Production](https://skforecast.org/latest/user_guides/forecaster-in-production)
-- Create FastAPI app
-- use a GET request as it doesn't accept an values in the predict method
-- handles pulling today or yesterday based on what time the request is made
-- Previous days for released by Gridstatus at aprox 5pm the day after
-  - need to  predict 48 steps keeping the last 24
-  - previous day D-1 actual load is released at 6pm on day D we want to forecast day D+1
-  - we want the most accurate "previous window" to make predictions
-  - adjust training window size and use "gap" in forecaster
-2. Pull latest actual load from gridstatus
-3. Pull weather data and create exogenous variables
-4. create forecast
+## Results
+| Metric | Value |
+|--------|-------|
+| MAE    | 910 MW |
+| MAPE   | 2.75% |
+| Forecast Horizon | 48 hours |
+| Training Period | Jan 2023 – Jun 2024 |
+| Test Period | Jan 2025 – Dec 2025 |
 
 
-Basic Level
-- one contrainer running the app
-- /predict end point
-- If after 6pm returns next day forecast
-- if before 6pm returns todays forecast
-- no data storage
+## Tech Stack
+| Category | Tools |
+|----------|-------|
+| Modeling | LightGBM, skforecast, scikit-learn |
+| Data | GridStatus API, EIA Open Data API, Open-Meteo API |
+| Feature Engineering | pandas, NumPy |
+| EDA & Visualization | matplotlib, seaborn |
+| API | FastAPI, Uvicorn |
+| Environment | Python 3.11, Conda |
 
-Extension
-- add another contrainer with a database
-- save both the acutal load values and the predicitions
-- saves having to pull a weeks worth of actuals from api
-- can track drift in the predicitions or errors
-- deploy on google cloud run or other cloud service
-- automate api call when load is updated
-- - simple monitoring/drift check idea — even just logging predicted vs. actual after the fact shows production maturity
-- Streamlit dashboard to visualize forecasts
+
+## Data
+
+### Load Data
+Hourly SPP conforming load data was sourced from the GridStatus API (`spp_load_hourly`)
+covering January 2023 through December 2025. SPP reports load broken out by control zone —
+these were aggregated to a single system-wide total for each hour.
+
+**Conforming vs. Non-Conforming Load**
+SPP separates load into two categories: conforming load, which follows predictable patterns
+driven primarily by weather and calendar effects, and non-conforming load, which does not
+follow a predictable pattern and is forecast separately. This project focuses on conforming
+load only.
+
+**Data Pipeline**
+The extraction script pulls data in 60-day batches with rate limit handling (30
+requests/minute) and saves each batch to CSV as a checkpoint in case of failure mid-run.
+Each batch is written to `data/raw/load/` and read back in and concatenated at the end
+of the pull.
+
+**Data Challenges & Dead Ends**
+During development the GridStatus API rate limit was hit, requiring a temporary switch to
+the EIA Open Data API as an alternative source. The EIA data contained significant quality
+issues — flat/stuck demand values persisting across multiple consecutive hours and other
+anomalous readings not present in the GridStatus data. Several approaches were explored
+to work around this including:
+- Flagging flat demand runs using a rolling difference threshold and replacing with NaN
+- Down-weighting anomalous periods during training using skforecast's `weight_func`
+  parameter to preserve time series continuity
+
+Once the GridStatus rate limit cleared, the pipeline was reverted to GridStatus as the
+primary data source. The GridStatus data required no anomaly handling — 7 missing hours
+were identified across the 3-year window, primarily on DST transition dates, and filled
+via time-based interpolation.
+
+### Weather Data
+Hourly temperature data for Kansas City, MO was sourced from the Open-Meteo API.
+Kansas City was selected as a single representative location given SPP's large north-south
+footprint spanning North Dakota to Oklahoma. Additional weather locations (Oklahoma City,
+Sioux Falls) were considered but deferred pending feature selection results.
+
+- Training data used the **archive API** (`archive-api.open-meteo.com`) for complete
+historical coverage
+- Production forecasts use the **forecast API** (`api.open-meteo.com`) for forward-looking
+temperature inputs
+
+**Note:** The model is trained on observed temperature actuals. In production, forecasted
+temperature values are used as exogenous inputs, meaning real-world performance may differ
+slightly from backtested results due to temperature forecast error.
+
+### Final Dataset
+- 26,304 hourly observations (January 2023 – December 2025)
+- 7 missing hours filled via time interpolation
+- No anomalous values in the final GridStatus dataset
+
+
+## Features
+
+Features were engineered from two sources: the weather data and the datetime index.
+All feature engineering is encapsulated in `app/features.py` and applied via pandas
+method chaining.
+
+### Calendar Features
+| Feature | Description |
+|---------|-------------|
+| `month` | Month of year (1–12) |
+| `week` | ISO week of year |
+| `day_of_week` | Day of week (0=Monday, 6=Sunday) |
+| `hour` | Hour of day (0–23) |
+| `Holiday` | Binary flag for US federal holidays |
+
+### Cyclical Encoding
+Raw calendar features were sine/cosine encoded to preserve their cyclical nature
+(e.g. hour 23 is close to hour 0, not far from it):
+
+| Feature | Description |
+|---------|-------------|
+| `month_sin`, `month_cos` | Cyclical encoding of month |
+| `week_sin`, `week_cos` | Cyclical encoding of week |
+| `day_sin`, `day_cos` | Cyclical encoding of day of week |
+| `hour_sin`, `hour_cos` | Cyclical encoding of hour |
+
+### Temperature Features
+| Feature | Description |
+|---------|-------------|
+| `Temperature` | Hourly temperature in Kansas City (°C) |
+| `Temp_3D_Mean` | 3-day rolling mean temperature |
+| `Temp_2D_Max` | 2-day rolling maximum temperature |
+| `Temp_2D_Min` | 2-day rolling minimum temperature |
+| `Temp_1D_Min` | 1-day rolling minimum temperature |
+
+Rolling temperature features capture the lagged effect of sustained heat or cold on
+energy demand — HVAC-driven load responds to temperature trends over multiple days,
+not just the current hour.
+
+### Autoregressive Lags
+Lagged demand values were selected by training an initial autoregressive model over
+a 175-lag window and extracting the top 15 most important lags by feature importance,
+with `lag_24` (same hour yesterday) force-included. Final lags selected:
+
+```python
+lags = [1, 2, 3, 23, 24, 25, 47, 48, 49, ...]  # top lags from importance ranking
+```
+
+### Feature Selection
+Recursive Feature Elimination with Cross Validation (RFECV) was used to select the
+final feature set from the full candidate pool. Features were selected using a
+5-fold time-series aware cross validation scheme to avoid data leakage.
+
+## Modeling
+
+### Approach
+The model uses a recursive multi-step forecasting strategy via skforecast's
+`ForecasterRecursive`, which wraps a LightGBM regressor (`LGBMRegressor`) and handles
+the time series specific logic of constructing lag features, managing the forecast
+horizon, and iterating predictions forward step by step.
+
+In a recursive forecaster, each predicted value is fed back as an input to predict
+the next step — this allows forecasting arbitrary horizons from a single model at
+the cost of compounding prediction error over longer horizons.
+
+### Train / Validation / Test Split
+All splits are strictly chronological to prevent data leakage.
+
+| Split | Date Range | Observations |
+|-------|------------|--------------|
+| Train | Jan 2023 – Jun 2024 | 13,128 hours |
+| Validation | Jul 2024 – Dec 2024 | 4,416 hours |
+| Test | Jan 2025 – Dec 2025 | 8,760 hours |
+
+### Hyperparameter Tuning
+Bayesian hyperparameter search was performed using skforecast's
+`bayesian_search_forecaster` over the train + validation window. The following
+parameters were tuned:
+
+| Parameter | Search Range |
+|-----------|-------------|
+| `n_estimators` | 300 – 1000 |
+| `max_depth` | 3 – 10 |
+| `learning_rate` | 0.01 – 0.5 |
+| `reg_alpha` | 0 – 1 |
+| `reg_lambda` | 0 – 1 |
+
+### Backtesting
+Final model performance was evaluated on the held-out 2025 test set using
+skforecast's `backtesting_forecaster` with a 24-step forecast horizon and a
+growing training window. This simulates realistic production conditions where
+the model predicts one day ahead using all available historical data.
+
+### Results
+| Metric | Value |
+|--------|-------|
+| MAE | 910 MW |
+| MAPE | 2.75% |
+
+A MAPE of 2.75% is competitive with industry benchmarks for day-ahead hourly
+load forecasting, which typically range from 1–3% for large balancing authorities.
+
+## API
+
+The trained model is served via a FastAPI application that pulls live data,
+constructs features, and returns a 48-hour hourly load forecast on demand.
+
+### Endpoints
+
+#### `GET /predict`
+Returns a 48-hour SPP load forecast starting from the current day.
+
+**Logic:**
+- If called **after 6:00 PM local time**: returns a forecast for tomorrow (D+1),
+  using yesterday's actual load as the last window
+- If called **before 6:00 PM local time**: returns a forecast for today (D),
+  using the prior day's actual load as the last window
+
+This logic reflects the GridStatus data release schedule — prior day actual load
+is typically available by 6:00 PM the following day.
+
+**Response:**
+```json
+{
+  "predictions": [
+    {"date": "2025-08-09 00:00:00", "Demand": 31245.6},
+    {"date": "2025-08-09 01:00:00", "Demand": 29876.3},
+    ...
+  ]
+}
+```
+
+**Data pulled at request time:**
+- Last 8 days of actual SPP load from GridStatus API (used as the last window
+  for the recursive forecaster)
+- 48-hour temperature forecast from Open-Meteo (used as exogenous input)
+
+### Running Locally
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the API
+fastapi dev app/main.py
+
+# Test the endpoint
+curl http://localhost:8000/predict
+```
+
+Interactive API docs available at `http://localhost:8000/docs`
+
+## Setup
+
+### Prerequisites
+- Python 3.11
+- Conda
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/maxwellgriffith345/spp-load-forecast.git
+cd spp-load-forecast
+
+# Create and activate conda environment
+conda create -n loadcast python=3.11
+conda activate loadcast
+
+# Install dependencies
+conda install -c conda-forge skforecast
+pip install -r requirements.txt
+```
+
+### Configuration
+Create a `config.py` file in the `app/` directory with your API keys:
+```python
+GRIDSTATUS_API_KEY = "your_gridstatus_api_key"
+```
+
+A GridStatus API key is required to run the application. A free tier is available
+at [gridstatus.io](https://www.gridstatus.io/products/api). No API key is needed
+for Open-Meteo.
+
+### Reproducing the Model
+To retrain the model from scratch:
+```bash
+# Pull raw data
+python scripts/extract.py
+
+# Train model (saves to model/forecaster_001.joblib)
+python scripts/train_model.py
+```
+
+### Running the API
+```bash
+fastapi dev app/main.py
+```
+API docs available at `http://localhost:8000/docs`
+
+---
+
+## Known Limitations & Future Work
+
+### Current Limitations
+- **Single weather location** — only Kansas City temperature is used. SPP spans
+  North Dakota to Oklahoma and a single location may not capture regional demand
+  drivers in the northern or southern extremes of the footprint
+- **Temperature actuals vs. forecasts** — the model was trained on observed
+  temperature actuals from the Open-Meteo archive API. In production, forecasted
+  temperatures are used as inputs, meaning real-world performance may differ from
+  backtested results due to temperature forecast error
+- **No data persistence** — the API pulls fresh data on every request with no
+  local storage. This increases latency and API dependency at request time
+- **Local deployment only** — the app is not currently deployed to a cloud
+  environment
+
+### Future Work
+- **Additional weather locations** — add Oklahoma City and Sioux Falls weather
+  stations and use feature selection to determine which locations add predictive
+  value
+- **Containerization & cloud deployment** — package the app in Docker and deploy
+  to Google Cloud Run for public access
+- **Data persistence** — add a database container to store actual load values and
+  predictions, reducing API calls at request time and enabling drift monitoring
+- **Drift monitoring** — log predicted vs. actual load after each day's data is
+  released to track model performance over time and trigger retraining when error
+  exceeds a threshold
+- **Streamlit dashboard** — build a simple visualization layer showing forecast vs.
+  actual load, feature importance, and model error metrics
+- **Automated prediction trigger** — automate the API call when GridStatus releases
+  the prior day's actual load (~6:00 PM) rather than relying on manual requests
